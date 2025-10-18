@@ -93,7 +93,12 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-        volumeMounts: []
-      volumes: []
+        volumeMounts:
+          - name: pod-startup-logs
+            mountPath: /data     # where your Go code writes the JSON file
+      volumes:
+        - name: pod-startup-logs
+          persistentVolumeClaim:
+            claimName: pod-startup-pvc
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

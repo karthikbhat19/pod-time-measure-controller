@@ -36,9 +36,9 @@ type PodStartupReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=monitoring.karthik.dev,resources=podstartups,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=monitoring.karthik.dev,resources=podstartups/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=monitoring.karthik.dev,resources=podstartups/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=pods/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -118,7 +118,7 @@ func (r *PodStartupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	logger.Info("Pod lifecycle event", "json", string(jsonData))
 
 	// Optionally persist locally (controller pod)
-	file, err := os.OpenFile("/tmp/pod_startup_times.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile("/data/pod_startup_times.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
 		file.Write(jsonData)
 		file.Write([]byte("\n"))

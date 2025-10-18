@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-debug
+  namespace: pod-time-measure-controller-system
+spec:
+  containers:
+  - name: debug
+    image: ubuntu:22.04
+    command: ["sleep", "3600"]
+    volumeMounts:
+    - name: pod-logs
+      mountPath: /data
+  volumes:
+  - name: pod-logs
+    persistentVolumeClaim:
+      claimName: pod-startup-pvc
