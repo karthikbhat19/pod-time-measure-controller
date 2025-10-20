@@ -30,6 +30,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+var PodStartupLogPath = "/data/pod_startup_times.json"
+
 // PodStartupReconciler reconciles a PodStartup object
 type PodStartupReconciler struct {
 	client.Client
@@ -117,13 +119,22 @@ func (r *PodStartupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	jsonData, _ := json.MarshalIndent(data, "", "  ")
 	logger.Info("Pod lifecycle event", "json", string(jsonData))
 
-	// Optionally persist locally (controller pod)
-	file, err := os.OpenFile("/data/pod_startup_times.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err == nil {
-		file.Write(jsonData)
-		file.Write([]byte("\n"))
-		file.Close()
+	// --- Persist locally (as JSON array) ---
+	var allData []map[string]interface{}
+
+	// If the file already exists and has content, read it
+	if existing, err := os.ReadFile(PodStartupLogPath); err == nil && len(existing) > 0 {
+		_ = json.Unmarshal(existing, &allData)
 	}
+
+	// Append this new pod event data
+	allData = append(allData, data)
+
+	// Re-marshal everything as a JSON array
+	jsonData, _ = json.MarshalIndent(allData, "", "  ")
+
+	// Write back to the file (overwrites but keeps all previous entries)
+	_ = os.WriteFile(PodStartupLogPath, jsonData, 0644)
 
 	return ctrl.Result{}, nil
 }

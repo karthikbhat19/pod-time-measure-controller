@@ -7,6 +7,18 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: system
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: startup-pvc
+  namespace: pod-time-measure-controller-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -99,6 +111,6 @@ spec:
       volumes:
         - name: pod-startup-logs
           persistentVolumeClaim:
-            claimName: pod-startup-pvc
+            claimName: startup-pvc
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

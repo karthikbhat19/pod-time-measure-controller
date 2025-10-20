@@ -18,9 +18,12 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -56,6 +59,7 @@ var _ = BeforeSuite(func() {
 
 	ctx, cancel = context.WithCancel(context.TODO())
 
+	PodStartupLogPath = "./test_pod_startup_times.json"
 	var err error
 	// +kubebuilder:scaffold:scheme
 
@@ -78,6 +82,34 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create temp dir for logs
+	testDir := GinkgoT().TempDir()
+
+	// Patch environment variable for writing logs
+	os.Setenv("LOG_OUTPUT_PATH", testDir)
+
+	reconciler := &PodStartupReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}
+
+	Expect(reconciler.SetupWithManager(k8sManager)).To(Succeed())
+
+	// Start the manager in a separate goroutine
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	k8sClient = k8sManager.GetClient()
 })
 
 var _ = AfterSuite(func() {
@@ -85,6 +117,13 @@ var _ = AfterSuite(func() {
 	cancel()
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
+
+	// --- Cleanup test output file ---
+	testFile := "./test_pod_startup_times.json"
+	if _, err := os.Stat(testFile); err == nil {
+		os.Remove(testFile)
+		By(fmt.Sprintf("Removed test file: %s", testFile))
+	}
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
