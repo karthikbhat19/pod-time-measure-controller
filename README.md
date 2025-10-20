@@ -45,19 +45,22 @@
    make manifests
    ```
 
-3. **Apply PV/PVC and debug-pod manifests:**
+3. **Apply PV and debug-pod manifests:**
 
    ```sh
-   kubectl create ns pod-time-measure-controller-system
    kubectl apply -f pod-time-logger-pv.yaml
-   kubectl apply -f pod-time-logger-pvc.yaml
-   kubectl apply -f debug-pod.yaml
    ```
 
 4. **Deploy to your cluster:**
 
    ```sh
    make deploy
+   ```
+
+5. **(Optional) Deploy debug pod to access json from pvc**
+
+   ```sh
+   kubectl apply -f debug-pod.yaml
    ```
 
 ### Usage
@@ -94,6 +97,43 @@ make run
 
 ### Testing
 
+The project includes unit tests for the controller logic using the Ginkgo testing framework and controller-runtime's fake client.
+
+#### Running Tests
+
 ```sh
 make test
 ```
+
+Or run tests directly with Go:
+
+```sh
+go test ./internal/controller -v
+```
+
+#### Test Structure
+
+- **Suite Setup:** `suite_test.go` provides minimal Ginkgo bootstrapping and logger initialization.
+- **Controller Tests:** `podstartup_controller_test.go` contains unit tests that:
+  - Use a fake Kubernetes client for isolated, fast testing without requiring a real cluster
+  - Create test pods and simulate status transitions (Pending → Running)
+  - Verify that the controller correctly measures pod startup times
+  - Validate that JSON timing data is written to the configured output path
+
+#### Test Configuration
+
+The controller's output path is configurable via environment variables for flexible testing:
+
+- For Testing the json path is set to `./test_pod_startup_times.json`
+- Default: `/data/pod_startup_times.json`
+
+#### Adding New Tests
+
+When adding new test cases:
+
+1. Use the fake client from `sigs.k8s.io/controller-runtime/pkg/client/fake` for unit tests
+2. Create test pods with appropriate status conditions
+3. Call the reconciler's `Reconcile` method directly
+4. Verify the expected JSON output and timing calculations
+
+For integration tests that require a real API server, consider using `envtest` in a separate test file.
