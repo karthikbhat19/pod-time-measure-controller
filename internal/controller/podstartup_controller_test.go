@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -78,8 +77,6 @@ var _ = Describe("PodStartupReconciler", func() {
 			return k8sClient.Status().Update(context.Background(), &existing)
 		}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
-		time.Sleep(1 * time.Second) // Have to remove this, Currently it takes time for the controller to write to the file
-
 		By("Waiting for reconciliation to happen")
 		Eventually(func() bool {
 			data, err := os.ReadFile("./test_pod_startup_times.json")
@@ -87,18 +84,23 @@ var _ = Describe("PodStartupReconciler", func() {
 		}, 10*time.Second, 1*time.Second).Should(BeTrue(), "controller should have written JSON data")
 
 		By("Verifying JSON structure")
-		data, err := os.ReadFile("./test_pod_startup_times.json")
-		Expect(err).ToNot(HaveOccurred())
+		Eventually(func(g Gomega) {
+			// Try reading the file
+			data, err := os.ReadFile("./test_pod_startup_times.json")
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(len(data)).To(BeNumerically(">", 0))
 
-		var arr []map[string]interface{}
-		Expect(json.Unmarshal(data, &arr)).To(Succeed())
+			var arr []map[string]interface{}
+			g.Expect(json.Unmarshal(data, &arr)).To(Succeed())
+			g.Expect(len(arr)).To(BeNumerically(">", 0))
 
-		latest := arr[len(arr)-1] // pick the most recent pod event
-		// Print the latest event for debugging
-		fmt.Fprintf(GinkgoWriter, "Latest pod event: %+v\n", latest["phase"])
+			latest := arr[len(arr)-1] // pick the most recent pod event
 
-		Expect(latest["pod"]).To(Equal("test-pod"))
-		Expect(latest["namespace"]).To(Equal("default"))
-		Expect(latest["phase"]).To(Equal("Running"))
+			// Validate core fields
+			g.Expect(latest["pod"]).To(Equal("test-pod"))
+			g.Expect(latest["namespace"]).To(Equal("default"))
+			g.Expect(latest["phase"]).To(Equal("Running"))
+
+		}, 10*time.Second, 500*time.Millisecond)
 	})
 })
