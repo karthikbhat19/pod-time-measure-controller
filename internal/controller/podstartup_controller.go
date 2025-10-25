@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -35,7 +36,8 @@ var PodStartupLogPath = "/data/pod_startup_times.json"
 // PodStartupReconciler reconciles a PodStartup object
 type PodStartupReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	FileLock sync.Mutex
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -122,9 +124,17 @@ func (r *PodStartupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// --- Persist locally (as JSON array) ---
 	var allData []map[string]interface{}
 
+	// Lock to prevent race conditions
+	r.FileLock.Lock()
+	defer r.FileLock.Unlock() // Ensures the lock is released even if a panic occurs
+
 	// If the file already exists and has content, read it
 	if existing, err := os.ReadFile(PodStartupLogPath); err == nil && len(existing) > 0 {
-		_ = json.Unmarshal(existing, &allData)
+		if err := json.Unmarshal(existing, &allData); err != nil {
+			// If the file is corrupt, log it and reset
+			logger.Error(err, "Failed to unmarshal existing log file, resetting.")
+			allData = []map[string]interface{}{} // Reset to empty slice
+		}
 	}
 
 	// Append this new pod event data
@@ -134,7 +144,9 @@ func (r *PodStartupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	jsonData, _ = json.MarshalIndent(allData, "", "  ")
 
 	// Write back to the file (overwrites but keeps all previous entries)
-	_ = os.WriteFile(PodStartupLogPath, jsonData, 0644)
+	if err := os.WriteFile(PodStartupLogPath, jsonData, 0644); err != nil {
+		logger.Error(err, "Failed to write updated log file")
+	}
 
 	return ctrl.Result{}, nil
 }
